@@ -28,6 +28,7 @@
 #include "dbTextWriter.h"
 #include "dbCellMapping.h"
 #include "dbInstElement.h"
+#include "dbPolygon.h"
 #include "dbWriter.h"
 #include "tlString.h"
 #include "tlUnitTest.h"
@@ -969,6 +970,41 @@ TEST(13_InstancesInLockedLayout)
     a += i->cell_inst ().front ().disp ();
   }
   EXPECT_EQ (a.to_string (), "111,222");
+}
+
+TEST(14_CopyTreeCollinearPoints)
+{
+  db::Layout l;
+  unsigned int layer = l.insert_layer (db::LayerProperties (1, 0));
+
+  db::Cell &src = l.cell (l.add_cell ("src"));
+  db::Cell &dst = l.cell (l.add_cell ("dst"));
+
+  db::Point pts[] = {
+    db::Point (0, 0),
+    db::Point (0, 2000),
+    db::Point (0, 3000),
+    db::Point (1000, 3000),
+    db::Point (1000, 0)
+  };
+
+  db::Polygon polygon;
+  polygon.assign_hull (&pts[0], &pts[sizeof(pts) / sizeof(pts[0])], false /* don't compress */);
+  src.shapes (layer).insert (polygon);
+
+  db::Polygon src_poly;
+  auto src_shape = src.shapes (layer).begin (db::ShapeIterator::All);
+  EXPECT_EQ (src_shape.at_end (), false);
+  EXPECT_EQ (src_shape->polygon (src_poly), true);
+  EXPECT_EQ (src_poly.to_string (), "(0,0;0,2000;0,3000;1000,3000;1000,0)");
+
+  dst.copy_tree (src);
+
+  db::Polygon dst_poly;
+  auto dst_shape = dst.shapes (layer).begin (db::ShapeIterator::All);
+  EXPECT_EQ (dst_shape.at_end (), false);
+  EXPECT_EQ (dst_shape->polygon (dst_poly), true);
+  EXPECT_EQ (dst_poly.to_string (), src_poly.to_string ());
 }
 
 //  issue #1860
